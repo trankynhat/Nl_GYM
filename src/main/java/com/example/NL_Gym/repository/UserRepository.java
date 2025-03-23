@@ -15,6 +15,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByEmail(String email);
+
+    @Override
+    Optional<User> findById(Integer integer);
+
     @Procedure("create_customer_account")
     void createCustomerAccount(
             String email,

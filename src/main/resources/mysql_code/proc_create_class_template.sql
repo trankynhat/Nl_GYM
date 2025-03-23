@@ -13,7 +13,7 @@ BEGIN
         SET MESSAGE_TEXT = 'Tên mẫu lớp học đã tồn tại!';
     ELSE
         -- Thêm mẫu lớp học mới
-        INSERT INTO class_templates (name, description, duration, max_participants)
+        INSERT INTO class_templates (name, description, default_duration, max_participants)
         VALUES (p_name, p_description, p_duration, p_max_participants);
     END IF;
 END //

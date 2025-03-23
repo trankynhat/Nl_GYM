@@ -38,9 +38,7 @@ CREATE TABLE class_templates (
     name VARCHAR(255) UNIQUE NOT NULL,
     description TEXT NOT NULL,
     default_duration INT NOT NULL,
-    max_participants INT NOT NULL,
-    created_by INT NOT NULL, -- Người tạo (ADMIN)
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    max_participants INT NOT NULL
 );
 
 -- Bảng classes (Coach chỉ có thể đăng ký từ class_templates)
