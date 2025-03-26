@@ -46,11 +46,18 @@ CREATE TABLE classes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     template_id INT NOT NULL,
     coach_id INT NOT NULL,
-    start_time DATETIME NOT NULL,
-    end_time DATETIME NOT NULL,
-    max_participants INT NOT NULL,
+    start_date DATE NOT NULL,
     FOREIGN KEY (template_id) REFERENCES class_templates(id) ON DELETE RESTRICT,
     FOREIGN KEY (coach_id) REFERENCES coaches(id) ON DELETE CASCADE
+);
+
+-- Bảng class_schedules (Lịch chi tiết của lớp học)
+CREATE TABLE class_schedules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_id INT NOT NULL,
+    day_of_week ENUM('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday') NOT NULL,
+    start_time TIME NOT NULL,
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 );
 
 -- Bảng bookings (Khách hàng đăng ký lớp học)

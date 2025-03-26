@@ -3,6 +3,7 @@ package com.example.NL_Gym.utils;
 import com.example.NL_Gym.model.Role;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -72,6 +73,25 @@ public class JWTUtil {
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }
+    }
+    public Integer getIDFromToken(String token) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .get("id", Integer.class);
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+    public String getEmailFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .setSigningKey(key)
+                .parseClaimsJws(token)
+                .getBody();
+        return claims.getSubject(); // Subject thường chứa email
     }
 
 }

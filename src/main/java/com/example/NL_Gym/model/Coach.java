@@ -30,5 +30,7 @@ public class Coach {
         this.expertise = expertise;
         this.maxClassesPerWeek = maxClassesPerWeek;
     }
+
+
     public Coach(){}
 }

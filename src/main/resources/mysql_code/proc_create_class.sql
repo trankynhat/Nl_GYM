@@ -1,64 +1,86 @@
+drop 
+
 DELIMITER //
-
-CREATE PROCEDURE create_class(
-    IN p_coach_id INT,
+CREATE PROCEDURE CreateClassWithSchedule(
     IN p_template_id INT,
-    IN p_start_time DATETIME,
-    IN p_end_time DATETIME,
-    IN p_max_participants INT
+    IN p_coach_user_id INT,  -- ID của Coach trong bảng users
+    IN p_start_date DATE,
+    IN p_schedule TEXT, 
+    OUT p_class_id INT,
+    OUT p_status_message VARCHAR(255)
 )
-BEGIN
-    DECLARE weekly_limit INT;
-    DECLARE current_count INT;
-    DECLARE template_exists INT;
-    DECLARE coach_exists INT;
+proc_block: BEGIN  -- Gán nhãn proc_block cho toàn bộ procedure
+    -- KHAI BÁO BIẾN PHẢI ĐƯỢC ĐẶT Ở ĐẦU
+    DECLARE v_coach_id INT;
+    DECLARE v_max_classes_per_week INT;
+    DECLARE v_classes_count INT;
+    DECLARE i INT DEFAULT 0;
+    DECLARE v_day_of_week VARCHAR(20);
+    DECLARE v_start_time TIME;
 
-    -- Kiểm tra xem Coach có tồn tại không
-    SELECT COUNT(*) INTO coach_exists FROM coaches WHERE user_id = p_coach_id;
-    IF coach_exists = 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Coach không hợp lệ!';
+    -- Kiểm tra Coach có tồn tại không
+    SELECT id, max_classes_per_week INTO v_coach_id, v_max_classes_per_week
+    FROM coaches WHERE user_id = p_coach_user_id;
+    
+    IF v_coach_id IS NULL THEN
+        SET p_status_message = 'Coach không tồn tại';
+        SET p_class_id = NULL;
+        LEAVE proc_block;  -- Thoát khỏi procedure nếu không có Coach
     END IF;
 
-    -- Kiểm tra template có tồn tại không
-    SELECT COUNT(*) INTO template_exists FROM class_templates WHERE id = p_template_id;
-    IF template_exists = 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Template lớp học không hợp lệ!';
+    -- Kiểm tra Template có tồn tại không
+    IF NOT EXISTS (SELECT 1 FROM class_templates WHERE id = p_template_id) THEN
+        SET p_status_message = 'Class template không tồn tại';
+        SET p_class_id = NULL;
+        LEAVE proc_block;
     END IF;
 
-    -- Kiểm tra thời gian hợp lệ
-    IF p_end_time <= p_start_time THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Thời gian kết thúc phải lớn hơn thời gian bắt đầu!';
-    END IF;
-
-    -- Lấy số lớp tối đa mà Coach có thể tạo mỗi tuần
-    SELECT max_classes_per_week INTO weekly_limit FROM coaches WHERE user_id = p_coach_id;
-
-    -- Đếm số lớp Coach đã tạo trong tuần hiện tại
-    SELECT COUNT(*) INTO current_count
+    -- Đếm số lớp học Coach đã tạo trong tuần
+    SELECT COUNT(*) INTO v_classes_count
     FROM classes
-    WHERE coach_id = p_coach_id
-    AND YEARWEEK(start_time, 1) = YEARWEEK(NOW(), 1);
+    WHERE coach_id = v_coach_id AND YEARWEEK(start_date) = YEARWEEK(p_start_date);
 
-    -- Nếu số lượng lớp đã đạt giới hạn, ngăn chặn việc tạo thêm lớp
-    IF current_count >= weekly_limit THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Coach đã đạt giới hạn số lớp có thể tạo trong tuần!';
-    ELSE
-        -- Tạo lớp học mới
-        INSERT INTO classes (template_id, coach_id, start_time, end_time, max_participants)
-        VALUES (p_template_id, p_coach_id, p_start_time, p_end_time, p_max_participants);
+    -- Kiểm tra Coach có vượt quá giới hạn lớp mỗi tuần không
+    IF v_classes_count >= v_max_classes_per_week THEN
+        SET p_status_message = 'Coach đã đạt giới hạn lớp học trong tuần';
+        SET p_class_id = NULL;
+        LEAVE proc_block;
     END IF;
-END //
 
+    -- Thêm lớp học mới vào bảng classes
+    INSERT INTO classes (template_id, coach_id, start_date)
+    VALUES (p_template_id, v_coach_id, p_start_date);
+
+    -- Lấy ID của lớp học mới tạo
+    SET p_class_id = LAST_INSERT_ID();
+
+    -- Thêm lịch học từ JSON vào class_schedules
+    SET i = 0;
+    WHILE i < JSON_LENGTH(p_schedule) DO
+        SET v_day_of_week = JSON_UNQUOTE(JSON_EXTRACT(p_schedule, CONCAT('$[', i, '].day')));
+        SET v_start_time = JSON_UNQUOTE(JSON_EXTRACT(p_schedule, CONCAT('$[', i, '].time')));
+
+        -- Kiểm tra trùng lịch học
+        IF EXISTS (
+            SELECT 1 FROM class_schedules cs
+            JOIN classes c ON cs.class_id = c.id
+            WHERE c.coach_id = v_coach_id
+            AND cs.day_of_week = v_day_of_week
+            AND cs.start_time = v_start_time
+        ) THEN
+            SET p_status_message = CONCAT('Coach đã có lớp vào ', v_day_of_week, ' lúc ', v_start_time);
+            SET p_class_id = NULL;
+            LEAVE proc_block;
+        END IF;
+
+        -- Thêm vào class_schedules
+        INSERT INTO class_schedules (class_id, day_of_week, start_time)
+        VALUES (p_class_id, v_day_of_week, v_start_time);
+
+        SET i = i + 1;
+    END WHILE;
+
+    SET p_status_message = 'Lớp học và lịch tập đã được tạo thành công';
+
+END proc_block; //
 DELIMITER ;
--- Giả sử có Coach với user_id = 1 và Template với id = 1
-CALL create_class(
-    1,               -- p_coach_id (user_id của Coach)
-    1,               -- p_template_id (ID của class template)
-    '2025-03-10 08:00:00', -- p_start_time
-    '2025-03-10 09:00:00', -- p_end_time
-    10               -- p_max_participants
-);

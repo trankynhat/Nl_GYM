@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface CoachRepository extends JpaRepository<Coach, Integer> {
     Optional<Coach> findByUserId(Integer userId);
+
+
 }
